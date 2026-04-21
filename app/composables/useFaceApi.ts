@@ -31,12 +31,20 @@ export function useFaceApi() {
     return res.json() as Promise<{ success: boolean; photos: PhotoItem[]; error?: string }>
   }
 
-  /** Compressed preview URL */
+  /**
+   * Preview URL — /api/preview/ serve JPEG terkompresi < 80 KB.
+   * Digunakan untuk grid foto dan modal preview. Load cepat, hemat bandwidth.
+   * File preview di-cache di server (uploads/previews/) sehingga tidak di-generate ulang.
+   */
   function previewUrl(filename: string) {
-    return `${base}/api/image/compressed/${filename}`
+    return `${base}/api/preview/${filename}`
   }
 
-  /** HD download URL */
+  /**
+   * HD download URL — /api/download/ serve file HD asli dengan
+   * Content-Disposition: attachment sehingga browser langsung download file,
+   * bukan membuka gambar di tab baru.
+   */
   function downloadUrl(filename: string) {
     return `${base}/api/download/${filename}`
   }

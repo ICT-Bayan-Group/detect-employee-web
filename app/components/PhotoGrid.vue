@@ -12,7 +12,10 @@
       <div class="pg-header-actions">
         <span class="pg-hint">💡 Preview · Download untuk kualitas HD</span>
         <button class="btn-reset" @click="emit('reset')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M1 4v6h6M23 20v-6h-6"/>
+            <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
+          </svg>
           Ulangi
         </button>
       </div>
@@ -37,10 +40,16 @@
         @click="emit('select', photo)"
       >
         <div class="pc-thumb">
+          <!-- 
+            FIX: previewUrl() now returns base + /uploads/filename
+            which matches the /uploads/<filename> route in Flask.
+            Previously it was calling /api/image/compressed/ which doesn't exist → 404.
+          -->
           <img
             :src="previewUrl(photo.filename)"
             :alt="photo.metadata.event_name ?? photo.filename"
             loading="lazy"
+            @error="onImgError"
           />
           <div class="pc-overlay">
             <span class="pc-overlay-icon">🔍</span>
@@ -85,6 +94,12 @@ function formatDate(raw: string) {
   return new Date(raw).toLocaleDateString('id-ID', {
     year: 'numeric', month: 'short', day: 'numeric'
   })
+}
+
+/** Fallback: jika gambar gagal load, tampilkan placeholder */
+function onImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150"%3E%3Crect width="200" height="150" fill="%23f1f5f9"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="13" font-family="sans-serif"%3EGambar tidak tersedia%3C/text%3E%3C/svg%3E'
 }
 </script>
 
@@ -202,14 +217,6 @@ function formatDate(raw: string) {
 .es-icon { font-size: 4rem; margin-bottom: 1.25rem; animation: float 3s ease-in-out infinite; }
 .es-title { font-size: 1.4rem; font-weight: 800; margin-bottom: .6rem; }
 .es-desc  { color: var(--text-md); max-width: 28rem; margin: 0 auto 1.75rem; line-height: 1.7; }
-.btn-gallery {
-  display: inline-block; padding: .8rem 1.8rem;
-  background: var(--brand-blue-lt);
-  color: var(--brand-blue);
-  border-radius: var(--radius); font-weight: 700; font-size: .88rem;
-  transition: background .2s;
-}
-.btn-gallery:hover { background: var(--brand-blue); color: #fff; }
 
 /* CTA Banner */
 .pg-cta {
@@ -222,14 +229,4 @@ function formatDate(raw: string) {
 }
 .cta-title { font-size: 1rem; font-weight: 800; margin-bottom: .3rem; color: var(--text); }
 .cta-sub   { font-size: .82rem; color: var(--text-md); }
-.btn-gallery-lg {
-  display: inline-block; padding: .8rem 1.75rem;
-  background: var(--brand-blue);
-  color: #fff; border-radius: var(--radius);
-  font-weight: 700; font-size: .88rem;
-  white-space: nowrap;
-  box-shadow: var(--shadow-blue);
-  transition: transform .2s, box-shadow .2s;
-}
-.btn-gallery-lg:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(26,93,200,.3); }
 </style>

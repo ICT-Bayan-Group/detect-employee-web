@@ -10,20 +10,33 @@
               <span class="modal-ai-label">Terdeteksi oleh AI</span>
             </div>
             <button class="modal-close" @click="emit('close')" aria-label="Tutup">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
             </button>
           </div>
 
           <!-- Image -->
           <div class="modal-img-wrap">
-            <img :src="previewUrl(photo.filename)" :alt="photo.metadata.event_name" />
+            <!-- 
+              FIX: previewUrl() now returns base + /uploads/filename
+              which matches the Flask /uploads/<filename> route.
+            -->
+            <img
+              :src="previewUrl(photo.filename)"
+              :alt="photo.metadata.event_name"
+              @error="onImgError"
+            />
             <div class="modal-img-badge">🔍 Preview</div>
           </div>
 
           <!-- Info -->
           <div class="modal-body">
             <div class="info-banner">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8v4m0 4h.01"/>
+              </svg>
               Ini adalah preview berukuran kecil. Download untuk mendapatkan kualitas HD penuh.
             </div>
 
@@ -37,9 +50,21 @@
 
           <!-- Actions -->
           <div class="modal-actions">
-            <button class="ma-btn ma-btn--download" @click="handleDownload">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download HD
+            <button
+              class="ma-btn ma-btn--download"
+              :class="{ 'ma-btn--loading': isDownloading }"
+              :disabled="isDownloading"
+              @click="handleDownload"
+            >
+              <svg v-if="isDownloading" class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              {{ isDownloading ? 'Mengunduh...' : 'Download HD' }}
             </button>
             <button class="ma-btn ma-btn--close" @click="emit('close')">Tutup</button>
           </div>
@@ -50,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { PhotoItem } from '~/composables/useFaceApi'
 import { useFaceApi } from '~/composables/useFaceApi'
 import { useToast } from '~/composables/useToast'
@@ -60,6 +85,8 @@ const emit  = defineEmits<{ close: [] }>()
 
 const { previewUrl, downloadUrl } = useFaceApi()
 const { show: showToast } = useToast()
+
+const isDownloading = ref(false)
 
 const detailRows = computed(() => {
   if (!props.photo) return []
@@ -78,23 +105,59 @@ const detailRows = computed(() => {
   ]
 })
 
-function handleDownload() {
-  if (!props.photo) return
-  const a = document.createElement('a')
-  a.href     = downloadUrl(props.photo.filename)
-  a.download = props.photo.filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  showToast('Download dimulai! Foto HD akan tersimpan.', 'success')
+/**
+ * Download via Blob agar file langsung tersimpan ke perangkat,
+ * bukan membuka tab/halaman baru. Ini diperlukan karena browser
+ * memblokir atribut `download` untuk URL cross-origin.
+ */
+async function handleDownload() {
+  if (!props.photo || isDownloading.value) return
+
+  isDownloading.value = true
+  try {
+    const url = downloadUrl(props.photo.filename)
+
+    // Fetch file sebagai blob
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Gagal mengambil foto (${response.status})`)
+
+    const blob = await response.blob()
+
+    // Buat object URL sementara dari blob
+    const blobUrl = URL.createObjectURL(blob)
+
+    // Trigger download
+    const a = document.createElement('a')
+    a.href     = blobUrl
+    a.download = props.photo.filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    // Bebaskan memory setelah download terpicu
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000)
+
+    showToast('✅ Download berhasil! Foto HD tersimpan.', 'success')
+  } catch (err) {
+    console.error('Download error:', err)
+    showToast('❌ Download gagal. Coba lagi.', 'error')
+  } finally {
+    isDownloading.value = false
+  }
+}
+
+/** Fallback gambar jika URL gagal load */
+function onImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect width="400" height="300" fill="%23f1f5f9"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="14" font-family="sans-serif"%3EGambar tidak tersedia%3C/text%3E%3C/svg%3E'
 }
 
 // Close on Escape
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && props.photo) emit('close')
-  })
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.photo) emit('close')
 }
+onMounted(() => window.addEventListener('keydown', handleKeydown))
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <style scoped>
@@ -198,6 +261,7 @@ if (typeof window !== 'undefined') {
   font-size: .85rem; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
   transition: all .2s;
+  cursor: pointer;
 }
 .ma-btn--download {
   background: linear-gradient(135deg, #16a34a, #15803d);
@@ -211,6 +275,13 @@ if (typeof window !== 'undefined') {
   flex: 0 0 auto;
 }
 .ma-btn--close:hover { background: var(--error-lt); color: var(--error); border-color: #fecaca; }
+.ma-btn--loading,
+.ma-btn:disabled {
+  opacity: .75; cursor: not-allowed;
+  transform: none !important; box-shadow: none !important;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .8s linear infinite; }
 
 /* Vue Transition */
 .modal-enter-active, .modal-leave-active { transition: opacity .3s; }
