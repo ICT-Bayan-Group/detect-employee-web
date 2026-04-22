@@ -43,8 +43,21 @@
       </template>
     </div>
 
-    <!-- Status -->
-    <div v-if="statusMsg" class="status-box" :class="`status-${statusType}`">
+    <!-- Loading Animation (saat isCapturing) -->
+    <div v-if="isCapturing" class="loading-box">
+      <div class="loading-spinner">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="loading-text">
+        <p class="loading-title">Mohon menunggu sebentar</p>
+        <p class="loading-sub">Sedang memproses data wajahmu…</p>
+      </div>
+    </div>
+
+    <!-- Status (hanya muncul saat tidak capturing) -->
+    <div v-else-if="statusMsg" class="status-box" :class="`status-${statusType}`">
       <span class="status-icon">
         {{ statusType === 'success' ? '✓' : statusType === 'error' ? '✕' : '⟳' }}
       </span>
@@ -124,7 +137,8 @@ function handleStop() {
 async function handleCapture() {
   if (!videoRef.value || isCapturing.value) return
   isCapturing.value = true
-  setStatus('Mengekstrak data wajah…', 'info')
+  // statusMsg dikosongkan — loading-box tampil otomatis lewat isCapturing
+  statusMsg.value = ''
 
   try {
     const image = capture(videoRef.value)
@@ -243,7 +257,55 @@ async function handleCapture() {
   animation: pulse-ring 1.2s ease-in-out infinite;
 }
 
-/* Status */
+/* ── Loading Box ── */
+.loading-box {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .9rem 1.1rem;
+  border-radius: var(--radius-sm);
+  background: var(--brand-blue-lt, #eff6ff);
+  border: 1px solid #bfdbfe;
+  margin-bottom: 1.25rem;
+  animation: fadeSlideIn .25s ease-out;
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.loading-spinner span {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--brand-blue, #1a5dc8);
+  animation: bounceDot 1.2s ease-in-out infinite;
+}
+
+.loading-spinner span:nth-child(1) { animation-delay: 0s; }
+.loading-spinner span:nth-child(2) { animation-delay: 0.2s; }
+.loading-spinner span:nth-child(3) { animation-delay: 0.4s; }
+
+.loading-text { display: flex; flex-direction: column; gap: .1rem; }
+
+.loading-title {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--brand-blue, #1a5dc8);
+  margin: 0;
+}
+
+.loading-sub {
+  font-size: .75rem;
+  color: var(--text-md, #64748b);
+  margin: 0;
+}
+
+/* ── Status ── */
 .status-box {
   display: flex; align-items: center; gap: .6rem;
   padding: .75rem 1rem;
@@ -251,6 +313,7 @@ async function handleCapture() {
   font-size: .82rem; font-weight: 600;
   margin-bottom: 1.25rem;
   border: 1px solid transparent;
+  animation: fadeSlideIn .25s ease-out;
 }
 .status-success { background: var(--success-lt); border-color: #bbf7d0; color: var(--success); }
 .status-error   { background: var(--error-lt);   border-color: #fecaca; color: var(--error); }
@@ -293,4 +356,30 @@ async function handleCapture() {
   flex: 0 0 auto; min-width: auto;
 }
 .cam-btn--stop:not(:disabled):hover { background: var(--error-lt); }
+
+/* Keyframes */
+@keyframes bounceDot {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+  40%           { transform: scale(1.2); opacity: 1; }
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scanLine {
+  from { top: 16%; }
+  to   { top: 84%; }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .5; transform: scale(1.3); }
+}
 </style>

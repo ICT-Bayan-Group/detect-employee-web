@@ -59,7 +59,7 @@
           alt="Bayan"
           class="footer-logo"
         />
-        <span class="footer-copy">© 2025 ICT Bayan · Internal Portal · Face Recognition</span>
+        <span class="footer-copy">© 2025 Balikpapan Office · Internal Portal · Face Recognition</span>
         <div class="footer-links">
         </div>
       </div>
