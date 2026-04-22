@@ -18,6 +18,13 @@
 
       <!-- Right links -->
       <nav class="navbar-links">
+        <div class="navbar-location">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          Bayan Balikpapan
+        </div>
       </nav>
     </div>
   </header>
@@ -73,8 +80,25 @@
 }
 .nav-link--admin:hover { background: var(--brand-blue); color: #fff; }
 
+/* Location label */
+.navbar-location {
+  display: flex; align-items: center; gap: .35rem;
+  font-size: .72rem; font-weight: 600;
+  color: var(--text-lt, #94a3b8);
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.navbar-location svg {
+  flex-shrink: 0;
+  opacity: .6;
+}
+
 @media (max-width: 480px) {
   .navbar-badge { display: none; }
   .nav-link:not(.nav-link--admin) { display: none; }
+  /* location tetap tampil di mobile */
+  .navbar-location {
+    font-size: .67rem;
+  }
 }
 </style>

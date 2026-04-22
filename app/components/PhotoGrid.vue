@@ -56,6 +56,13 @@
         <!-- Card info -->
         <div class="pc-info">
           <div class="pc-event">{{ photo.metadata.event_name ?? 'Kegiatan' }}</div>
+          <div class="pc-filename" :title="photo.filename">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            {{ shortFilename(photo.filename) }}
+          </div>
           <div class="pc-meta">
             <span>📍 {{ photo.metadata.location ?? '—' }}</span>
             <span>📅 {{ formatDate(photo.metadata.date) }}</span>
@@ -90,6 +97,10 @@
       <div class="cta-left">
         <h3 class="cta-title">Foto kamu belum semua ketemu?</h3>
         <p class="cta-sub">Jelajahi galeri lengkap untuk menemukan semua momen dari kegiatan.</p>
+        <button class="btn-primary" @click="emit('reset')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          Coba Lagi
+        </button>
       </div>
     </div>
   </div>
@@ -102,9 +113,12 @@ import { useFaceApi } from '~/composables/useFaceApi'
 import { useToast } from '~/composables/useToast'
 
 defineProps<{ photos: PhotoItem[] }>()
+
+// ✅ Satu defineEmits yang mencakup semua events
 const emit = defineEmits<{
   select: [photo: PhotoItem]
   reset: []
+  scrollToApp: []
 }>()
 
 const { previewUrl, downloadUrl } = useFaceApi()
@@ -113,7 +127,17 @@ const { show: showToast } = useToast()
 // Track per-card download state
 const downloadingMap = reactive<Record<string, boolean>>({})
 
-function formatDate(raw: string) {
+/**
+ * Hilangkan prefix timestamp (e.g. "20260422_054708_aaea6a67_")
+ * Tampilkan hanya bagian nama asli, misal "HDK_0398.JPG"
+ */
+function shortFilename(filename: string): string {
+  const match = filename.match(/^\d{8}_\d{6}_[a-f0-9]+_(.+)$/i)
+  return match ? match[1] : filename
+}
+
+function formatDate(raw: string | undefined) {
+  if (!raw) return '—'
   return new Date(raw).toLocaleDateString('id-ID', {
     year: 'numeric', month: 'short', day: 'numeric'
   })
@@ -288,8 +312,24 @@ function onImgError(e: Event) {
 .pc-event {
   font-weight: 700; font-size: .88rem; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: .45rem;
+  margin-bottom: .3rem;
 }
+
+/* Filename */
+.pc-filename {
+  display: flex; align-items: center; gap: .3rem;
+  font-size: .68rem; font-family: var(--font-mono);
+  color: var(--brand-blue);
+  background: var(--brand-blue-lt, #eff6ff);
+  border: 1px solid #bfdbfe;
+  border-radius: 5px;
+  padding: .18rem .45rem;
+  margin-bottom: .45rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: default;
+}
+.pc-filename svg { flex-shrink: 0; opacity: .7; }
+
 .pc-meta {
   display: flex; flex-direction: column; gap: .18rem;
   font-size: .7rem; color: var(--text-lt);
@@ -344,5 +384,18 @@ function onImgError(e: Event) {
   border-radius: var(--radius-lg);
 }
 .cta-title { font-size: 1rem; font-weight: 800; margin-bottom: .3rem; color: var(--text); }
-.cta-sub   { font-size: .82rem; color: var(--text-md); }
+.cta-sub   { font-size: .82rem; color: var(--text-md); margin-bottom: 1rem; }
+
+/* btn-primary — identik dengan Hero.vue */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .85rem 1.8rem;
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-md));
+  color: #fff; border: none; border-radius: var(--radius);
+  font-size: .9rem; font-weight: 700;
+  box-shadow: var(--shadow-blue);
+  transition: transform .2s, box-shadow .2s;
+  cursor: pointer;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(26,93,200,.3); }
 </style>
