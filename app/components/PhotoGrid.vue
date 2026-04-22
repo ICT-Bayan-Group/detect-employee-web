@@ -10,7 +10,7 @@
         </p>
       </div>
       <div class="pg-header-actions">
-        <span class="pg-hint">💡 Preview · Download untuk kualitas HD</span>
+        <span class="pg-hint">💡 Klik foto untuk preview · Download untuk kualitas HD</span>
         <button class="btn-reset" @click="emit('reset')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M1 4v6h6M23 20v-6h-6"/>
@@ -37,14 +37,9 @@
         :key="photo.filename"
         class="photo-card"
         :style="{ animationDelay: `${i * 0.06}s` }"
-        @click="emit('select', photo)"
       >
-        <div class="pc-thumb">
-          <!-- 
-            FIX: previewUrl() now returns base + /uploads/filename
-            which matches the /uploads/<filename> route in Flask.
-            Previously it was calling /api/image/compressed/ which doesn't exist → 404.
-          -->
+        <!-- Thumbnail area — click to preview -->
+        <div class="pc-thumb" @click="emit('select', photo)">
           <img
             :src="previewUrl(photo.filename)"
             :alt="photo.metadata.event_name ?? photo.filename"
@@ -52,11 +47,13 @@
             @error="onImgError"
           />
           <div class="pc-overlay">
-            <span class="pc-overlay-icon">🔍</span>
+            <span class="pc-overlay-icon">🔍 Lihat</span>
           </div>
           <div class="pc-ai-tag">AI ✓</div>
           <div class="pc-preview-tag">Preview</div>
         </div>
+
+        <!-- Card info -->
         <div class="pc-info">
           <div class="pc-event">{{ photo.metadata.event_name ?? 'Kegiatan' }}</div>
           <div class="pc-meta">
@@ -64,6 +61,26 @@
             <span>📅 {{ formatDate(photo.metadata.date) }}</span>
             <span>📸 {{ photo.metadata.photographer ?? '—' }}</span>
           </div>
+        </div>
+
+        <!-- Download button -->
+        <div class="pc-actions">
+          <button
+            class="pc-download-btn"
+            :class="{ loading: downloadingMap[photo.filename] }"
+            :disabled="downloadingMap[photo.filename]"
+            @click.stop="handleDownload(photo)"
+          >
+            <svg v-if="downloadingMap[photo.filename]" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            {{ downloadingMap[photo.filename] ? 'Mengunduh...' : 'Download HD' }}
+          </button>
         </div>
       </div>
     </div>
@@ -79,8 +96,10 @@
 </template>
 
 <script setup lang="ts">
+import { reactive } from 'vue'
 import type { PhotoItem } from '~/composables/useFaceApi'
 import { useFaceApi } from '~/composables/useFaceApi'
+import { useToast } from '~/composables/useToast'
 
 defineProps<{ photos: PhotoItem[] }>()
 const emit = defineEmits<{
@@ -88,7 +107,11 @@ const emit = defineEmits<{
   reset: []
 }>()
 
-const { previewUrl } = useFaceApi()
+const { previewUrl, downloadUrl } = useFaceApi()
+const { show: showToast } = useToast()
+
+// Track per-card download state
+const downloadingMap = reactive<Record<string, boolean>>({})
 
 function formatDate(raw: string) {
   return new Date(raw).toLocaleDateString('id-ID', {
@@ -96,7 +119,64 @@ function formatDate(raw: string) {
   })
 }
 
-/** Fallback: jika gambar gagal load, tampilkan placeholder */
+/**
+ * Download berlapis 3 fallback agar work di semua device:
+ *  1. Fetch → Blob → <a download>  (Chrome desktop, Android)
+ *  2. <a download href=url>         (Firefox, Edge)
+ *  3. window.open(url)              (iOS Safari — buka tab baru)
+ */
+async function handleDownload(photo: PhotoItem) {
+  if (downloadingMap[photo.filename]) return
+  downloadingMap[photo.filename] = true
+
+  const filename = photo.filename
+  const url = downloadUrl(filename)
+
+  try {
+    // ── Metode 1: Fetch → Blob ──
+    const response = await fetch(url, { mode: 'cors' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const blob = await response.blob()
+    const blobWithType = blob.type
+      ? blob
+      : new Blob([blob], { type: 'image/jpeg' })
+
+    const blobUrl = URL.createObjectURL(blobWithType)
+    const a = document.createElement('a')
+    a.href     = blobUrl
+    a.download = filename
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000)
+
+    showToast('✅ Download berhasil! Cek folder Downloads kamu.', 'success')
+
+  } catch (fetchErr) {
+    console.warn('Blob download failed, trying anchor:', fetchErr)
+    try {
+      // ── Metode 2: Anchor fallback ──
+      const a = document.createElement('a')
+      a.href     = url
+      a.download = filename
+      a.rel      = 'noopener'
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      showToast('⬇️ Download dimulai...', 'success')
+    } catch {
+      // ── Metode 3: Buka tab baru (iOS Safari) ──
+      window.open(url, '_blank', 'noopener,noreferrer')
+      showToast('📂 Foto dibuka di tab baru. Tekan & tahan lalu pilih "Simpan".', 'success')
+    }
+  } finally {
+    downloadingMap[photo.filename] = false
+  }
+}
+
 function onImgError(e: Event) {
   const img = e.target as HTMLImageElement
   img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150"%3E%3Crect width="200" height="150" fill="%23f1f5f9"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-size="13" font-family="sans-serif"%3EGambar tidak tersedia%3C/text%3E%3C/svg%3E'
@@ -150,9 +230,10 @@ function onImgError(e: Event) {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  cursor: pointer;
   transition: transform .25s, box-shadow .25s, border-color .25s;
   animation: cardIn .5s ease-out both;
+  display: flex;
+  flex-direction: column;
 }
 .photo-card:hover {
   transform: translateY(-5px);
@@ -160,9 +241,11 @@ function onImgError(e: Event) {
   border-color: var(--brand-blue-md);
 }
 
+/* Thumbnail */
 .pc-thumb {
   position: relative; overflow: hidden;
   aspect-ratio: 4/3;
+  cursor: pointer;
 }
 .pc-thumb img {
   width: 100%; height: 100%; object-fit: cover;
@@ -173,12 +256,14 @@ function onImgError(e: Event) {
 
 .pc-overlay {
   position: absolute; inset: 0;
-  background: rgba(26,93,200,.45);
+  background: rgba(4,8,20,.5);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity .25s;
-  font-size: 2rem;
+  font-size: .9rem; font-weight: 700; color: #fff; gap: .3rem;
+  letter-spacing: .04em;
 }
 .photo-card:hover .pc-overlay { opacity: 1; }
+.pc-overlay-icon { font-size: 1.5rem; }
 
 .pc-ai-tag {
   position: absolute; top: .6rem; left: .6rem;
@@ -198,7 +283,8 @@ function onImgError(e: Event) {
   backdrop-filter: blur(4px);
 }
 
-.pc-info { padding: .85rem 1rem; }
+/* Info */
+.pc-info { padding: .85rem 1rem .5rem; flex: 1; }
 .pc-event {
   font-weight: 700; font-size: .88rem; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -209,6 +295,36 @@ function onImgError(e: Event) {
   font-size: .7rem; color: var(--text-lt);
   font-family: var(--font-mono);
 }
+
+/* Download button on card */
+.pc-actions {
+  padding: .6rem 1rem .85rem;
+}
+.pc-download-btn {
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  padding: .55rem .9rem;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: .76rem; font-weight: 700;
+  cursor: pointer;
+  transition: transform .2s, box-shadow .2s, opacity .2s;
+  box-shadow: 0 2px 10px rgba(22,163,74,.2);
+}
+.pc-download-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(22,163,74,.35);
+}
+.pc-download-btn.loading,
+.pc-download-btn:disabled {
+  opacity: .65; cursor: not-allowed;
+  transform: none; box-shadow: none;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .8s linear infinite; }
 
 /* Empty state */
 .empty-state {

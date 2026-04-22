@@ -32,24 +32,30 @@ export function useFaceApi() {
   }
 
   /**
+   * Fetch ALL photos for public gallery (no face scan needed).
+   * Calls GET /api/photographer/photos
+   * Returns { success, photos[], error }
+   */
+  async function fetchAllPhotos() {
+    const res = await fetch(`${base}/api/photographer/photos`)
+    return res.json() as Promise<{ success: boolean; photos: GalleryPhoto[]; error?: string }>
+  }
+
+  /**
    * Preview URL — /api/preview/ serve JPEG terkompresi < 80 KB.
-   * Digunakan untuk grid foto dan modal preview. Load cepat, hemat bandwidth.
-   * File preview di-cache di server (uploads/previews/) sehingga tidak di-generate ulang.
    */
   function previewUrl(filename: string) {
     return `${base}/api/preview/${filename}`
   }
 
   /**
-   * HD download URL — /api/download/ serve file HD asli dengan
-   * Content-Disposition: attachment sehingga browser langsung download file,
-   * bukan membuka gambar di tab baru.
+   * HD download URL — /api/download/ dengan Content-Disposition: attachment.
    */
   function downloadUrl(filename: string) {
     return `${base}/api/download/${filename}`
   }
 
-  return { registerFace, fetchMyPhotos, previewUrl, downloadUrl }
+  return { registerFace, fetchMyPhotos, fetchAllPhotos, previewUrl, downloadUrl }
 }
 
 // ── Types ────────────────────────────────────────────────
@@ -59,6 +65,20 @@ export interface PhotoItem {
     event_name?: string
     location?: string
     date: string
+    photographer?: string
+  }
+}
+
+/** Shape returned by GET /api/photographer/photos */
+export interface GalleryPhoto {
+  photo_id: string
+  filename: string
+  faces_count: number
+  uploaded_at: string
+  metadata: {
+    event_name?: string
+    location?: string
+    date?: string
     photographer?: string
   }
 }
